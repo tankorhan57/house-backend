@@ -1,0 +1,10 @@
+const config = {
+  region: 'us-east-1',
+  account: '014810124016',
+  bucket: 'house-v2-documents-014810124016',
+  kmsKeyId: 'e2edcbbc-f8af-42c9-bd9a-85c5d6d30208',
+  bedrockModel: 'us.anthropic.claude-opus-4-6-v1',
+  appRoleArn: 'arn:aws:iam::014810124016:role/house-v2-app-role',
+};
+
+module.exports = config;

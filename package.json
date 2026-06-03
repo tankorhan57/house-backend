@@ -1,0 +1,41 @@
+{
+  "name": "house-v2",
+  "version": "1.0.0",
+  "description": "AI health vault that accumulates your medical documents, interprets each one in plain language, and builds longitudinal context across time.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tankorhan57/house-v2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tankorhan57/house-v2/issues"
+  },
+  "homepage": "https://github.com/tankorhan57/house-v2#readme",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1060.0",
+    "@aws-sdk/client-kms": "^3.1060.0",
+    "@aws-sdk/client-s3": "^3.1060.0",
+    "@aws-sdk/s3-request-presigner": "^3.1060.0",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.107.0",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^6.0.227",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
