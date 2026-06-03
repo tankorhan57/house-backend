@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.env.production
+*.zip
+dist/
+.next/
+coverage/
+.DS_Store
