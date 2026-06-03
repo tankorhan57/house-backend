@@ -1,6 +1,6 @@
 // Biomarker name normalization map
 // Key = canonical name, Value = list of aliases
-const NORMALIZATION_MAP = {
+export const NORMALIZATION_MAP = {
   crp: ['CRP', 'C-Reactive Protein', 'C Reactive Protein', 'hsCRP', 'hs-CRP', 'High Sensitivity CRP'],
   vitamin_d: ['Vitamin D', '25-OH Vitamin D', '25(OH)D', 'Vitamin D3', '25-Hydroxyvitamin D', 'Calcidiol'],
   ldl_cholesterol: ['LDL', 'LDL-C', 'LDL Cholesterol', 'LDL-Cholesterol', 'Low Density Lipoprotein'],
@@ -31,7 +31,7 @@ for (const [canonical, aliases] of Object.entries(NORMALIZATION_MAP)) {
   }
 }
 
-function normalizeBiomarker(name) {
+export function normalizeBiomarker(name) {
   if (!name) return { canonical: null, recognized: false };
 
   const lower = name.toLowerCase().trim();
@@ -41,8 +41,5 @@ function normalizeBiomarker(name) {
     return { canonical, recognized: true };
   }
 
-  // Not recognized — return raw name with flag
   return { canonical: name, recognized: false };
 }
-
-module.exports = { normalizeBiomarker, NORMALIZATION_MAP };
