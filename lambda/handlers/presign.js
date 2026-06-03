@@ -2,6 +2,7 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../lib/config');
+const { writeAuditLog } = require('../lib/audit-log');
 
 const s3 = new S3Client({ region: config.region });
 
@@ -10,14 +11,14 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 const URL_EXPIRY_SECONDS = 300; // 5 minutes
 
 // POST /presign
-// Body: { fileName, fileType, fileSize, userId }
-// Returns: { uploadUrl, documentId, key }
-exports.handler = async (event) => {
+// Body: { fileName, fileType, fileSize }
+// userId comes from the verified JWT, not the request body
+exports.handler = async (event, context, supabase, userId) => {
   try {
-    const { fileName, fileType, fileSize, userId } = JSON.parse(event.body || '{}');
+    const { fileName, fileType, fileSize } = JSON.parse(event.body || '{}');
 
-    if (!fileName || !fileType || !fileSize || !userId) {
-      return response(400, { error: 'fileName, fileType, fileSize, and userId are required' });
+    if (!fileName || !fileType || !fileSize) {
+      return response(400, { error: 'fileName, fileType, and fileSize are required' });
     }
 
     if (!ALLOWED_TYPES.includes(fileType)) {
@@ -46,6 +47,13 @@ exports.handler = async (event) => {
     });
 
     const uploadUrl = await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY_SECONDS });
+
+    await writeAuditLog(supabase, {
+      userId,
+      documentId,
+      action: 'presign_generated',
+      ipAddress: event.requestContext?.identity?.sourceIp,
+    });
 
     return response(200, { uploadUrl, documentId, key });
   } catch (err) {

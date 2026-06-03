@@ -1,3 +1,5 @@
+const { createServiceClient } = require('./supabase-client');
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
 
@@ -14,32 +16,28 @@ async function writeAuditLog(supabase, { userId, documentId, action, ipAddress }
     timestamp: new Date().toISOString(),
   };
 
+  // Use service role client for audit writes — bypasses RLS so the
+  // user cannot tamper with or suppress their own audit trail
+  const serviceClient = createServiceClient();
   let lastError;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const { error } = await supabase.from('audit_log').insert(entry);
-
+      const { error } = await serviceClient.from('audit_log').insert(entry);
       if (error) throw error;
       return; // success
     } catch (err) {
       lastError = err;
       console.error(`Audit log write attempt ${attempt} failed:`, err.message);
-
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * attempt);
-      }
+      if (attempt < MAX_RETRIES) await sleep(RETRY_DELAY_MS * attempt);
     }
   }
 
-  // All retries failed — log to CloudWatch and alert
+  // All retries failed — log to CloudWatch, do not throw (never blocks user action)
   console.error('CRITICAL: Audit log write failed after all retries. HIPAA compliance gap.', {
     entry,
     error: lastError?.message,
   });
-
-  // In production, this should trigger a CloudWatch alarm
-  // The error is logged but not thrown — audit log failure should not block the user action
 }
 
 module.exports = { writeAuditLog };
