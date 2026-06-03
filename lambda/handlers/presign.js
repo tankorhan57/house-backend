@@ -1,6 +1,6 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const config = require('../lib/config');
 const { writeAuditLog } = require('../lib/audit-log');
 
@@ -29,7 +29,7 @@ exports.handler = async (event, context, supabase, userId) => {
       return response(400, { error: 'File too large. Maximum size is 20MB.' });
     }
 
-    const documentId = uuidv4();
+    const documentId = randomUUID();
     const ext = fileName.split('.').pop().toLowerCase();
     const key = `documents/${userId}/${documentId}.${ext}`;
 
