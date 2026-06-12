@@ -7,3 +7,4 @@ dist/
 .next/
 coverage/
 .DS_Store
+.gstack/
