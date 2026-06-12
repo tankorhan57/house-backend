@@ -38,12 +38,21 @@ async function extractTextFromPDF(buffer) {
 }
 
 async function extractTextFromImage(imageBuffer, mimeType = 'image/jpeg') {
-  // Return image data for Bedrock Vision
+  // Normalize media type to values Bedrock accepts
+  const MEDIA_TYPE_MAP = {
+    'image/jpg': 'image/jpeg',
+    'image/jpeg': 'image/jpeg',
+    'image/png': 'image/png',
+    'image/gif': 'image/gif',
+    'image/webp': 'image/webp',
+  };
+  const normalizedType = MEDIA_TYPE_MAP[mimeType] || 'image/jpeg';
+
   return {
     type: 'image',
     source: {
       type: 'base64',
-      media_type: mimeType,
+      media_type: normalizedType,
       data: imageBuffer.toString('base64'),
     },
   };
