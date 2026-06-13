@@ -4,6 +4,9 @@ const config = require('../lib/config');
 
 const s3 = new S3Client({ region: config.region });
 
+// Injectable deps — overridden in unit tests
+exports._deps = { s3 };
+
 const MAX_DELETE_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
 
@@ -15,7 +18,7 @@ async function deleteS3ObjectWithRetry(key) {
   let lastError;
   for (let attempt = 1; attempt <= MAX_DELETE_RETRIES; attempt++) {
     try {
-      await s3.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+      await exports._deps.s3.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
       return; // success
     } catch (err) {
       lastError = err;
@@ -46,10 +49,7 @@ exports.handler = async (event, context, supabase, userId) => {
       return response(404, { error: 'Document not found' });
     }
 
-    // Step 1: Delete from S3 (with retry)
-    await deleteS3ObjectWithRetry(doc.s3_key);
-
-    // Step 2: Delete from Supabase
+    // Step 1: Delete from Supabase first (fail safe — document disappears from user's view)
     const { error: deleteError } = await supabase
       .from('documents')
       .delete()
@@ -57,6 +57,14 @@ exports.handler = async (event, context, supabase, userId) => {
       .eq('user_id', userId);
 
     if (deleteError) throw deleteError;
+
+    // Step 2: Delete from S3 (best-effort — row already gone from DB)
+    try {
+      await deleteS3ObjectWithRetry(doc.s3_key);
+    } catch (s3Err) {
+      // Log for async cleanup but don't fail the response — document is already removed from user's view
+      console.error(`S3 cleanup failed for key ${doc.s3_key}, document ${documentId}:`, s3Err.message);
+    }
 
     // Step 3: Audit log
     await writeAuditLog(supabase, {
@@ -73,10 +81,23 @@ exports.handler = async (event, context, supabase, userId) => {
   }
 };
 
-// DELETE /account — delete all user documents and account
+// All user-data tables that must be wiped on account deletion.
+// Tables that haven't been migrated yet (undefined_table, code 42P01) are
+// skipped — they're listed ahead of their migrations so deleteAccount
+// never silently misses a PHI table once it exists.
+const USER_DATA_TABLES = [
+  'documents',
+  'insights_cache',
+  'dismissed_insights',
+  'user_profiles',
+  'health_score_cache',
+  'chat_history',
+];
+
+// DELETE /account — delete all user data and account
 exports.deleteAccount = async (event, context, supabase, userId) => {
   try {
-    // Get all user documents
+    // Get all user documents first (need S3 keys before rows are gone)
     const { data: docs, error: fetchError } = await supabase
       .from('documents')
       .select('id, s3_key')
@@ -84,26 +105,34 @@ exports.deleteAccount = async (event, context, supabase, userId) => {
 
     if (fetchError) throw fetchError;
 
-    // Delete all S3 objects (with retry per object)
+    // Step 1: Delete Supabase rows FIRST (fail safe — PHI disappears from
+    // user's view immediately; S3 cleanup is best-effort afterward)
+    for (const table of USER_DATA_TABLES) {
+      const { error: dbError } = await supabase
+        .from(table)
+        .delete()
+        .eq('user_id', userId);
+
+      if (dbError) {
+        // 42P01 = undefined_table — table not migrated yet, skip
+        if (dbError.code === '42P01') continue;
+        console.error(`CRITICAL: failed to delete from ${table} for user ${userId}:`, dbError.message);
+        return response(500, {
+          error: 'Account deletion failed. Please contact support to complete deletion of your health data.',
+        });
+      }
+    }
+
+    // Step 2: Delete S3 objects (best-effort — rows already gone)
     const deleteResults = await Promise.allSettled(
       (docs || []).map((doc) => deleteS3ObjectWithRetry(doc.s3_key))
     );
 
     const failures = deleteResults.filter((r) => r.status === 'rejected');
     if (failures.length > 0) {
-      console.error(`CRITICAL: ${failures.length} S3 deletes failed during account deletion for user ${userId}`);
-      return response(500, {
-        error: 'Account deletion partially failed. Please contact support to complete deletion of your health data.',
-      });
+      // Log for async cleanup; do not fail — DB rows are already deleted
+      console.error(`CRITICAL: ${failures.length} S3 deletes failed during account deletion for user ${userId}. Orphaned objects require cleanup.`);
     }
-
-    // Delete all Supabase records
-    const { error: dbError } = await supabase
-      .from('documents')
-      .delete()
-      .eq('user_id', userId);
-
-    if (dbError) throw dbError;
 
     // Final audit log entry
     await writeAuditLog(supabase, {
@@ -125,7 +154,7 @@ function response(statusCode, body) {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': config.allowedOrigin,
     },
     body: JSON.stringify(body),
   };

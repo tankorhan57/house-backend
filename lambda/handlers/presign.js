@@ -37,8 +37,6 @@ exports.handler = async (event, context, supabase, userId) => {
       Bucket: config.bucket,
       Key: key,
       ContentType: fileType,
-      ServerSideEncryption: 'aws:kms',
-      SSEKMSKeyId: config.kmsKeyId,
       Metadata: {
         'user-id': userId,
         'document-id': documentId,
@@ -67,7 +65,7 @@ function response(statusCode, body) {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': config.allowedOrigin,
     },
     body: JSON.stringify(body),
   };
